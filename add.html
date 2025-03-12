@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Address Validator</title>
+</head>
+<body>
+    <h2>Enter Address to Validate</h2>
+    <input type="text" id="addressInput" placeholder="Enter an address">
+    <button onclick="validateAddress()">Check Address</button>
+    <p id="result"></p>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        async function giveCoordinates(location) {
+            try {
+                const geocodingUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`;
+                const response = await fetch(geocodingUrl);
+                const data = await response.json();
+
+                if (data && data.length > 0) {
+                    const latitude = parseFloat(data[0].lat);
+                    const longitude = parseFloat(data[0].lon);
+
+                    if (!isNaN(latitude) && !isNaN(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+                        return [latitude, longitude];
+                    }
+                }
+
+                const genAI = new GoogleGenerativeAI("AIzaSyDnHUOrPPdbli788qhCbNnnEbSu-EKxGG0");
+                const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+                const prompt = `Give me ONLY the exact latitude and longitude coordinates for ${location} in decimal degrees format.`;
+                
+                const result = await model.generateContent(prompt);
+                const response2 = await result.response;
+                const text = await response2.text();
+
+                const cardinalRegex = /([\d.-]+)°\s*[NSns],\s*([\d.-]+)°\s*[EWew]/i;
+                const cardinalMatch = text.match(cardinalRegex);
+
+                if (cardinalMatch) {
+                    const latitude = parseFloat(cardinalMatch[1]);
+                    const longitude = parseFloat(cardinalMatch[2]);
+                    if (!isNaN(latitude) && !isNaN(longitude)) {
+                        return [latitude, longitude];
+                    }
+                }
+
+                throw new Error("Could not find valid coordinates");
+            } catch (error) {
+                console.error(`Error finding coordinates for ${location}:`, error);
+                throw error;
+            }
+        }
+
+        async function validateAddress() {
+            const address = document.getElementById("addressInput").value;
+            const resultElement = document.getElementById("result");
+            
+            if (!address) {
+                resultElement.textContent = "Please enter an address.";
+                return;
+            }
+            
+            try {
+                const coordinates = await giveCoordinates(address);
+                resultElement.textContent = `Valid Address! Coordinates: ${coordinates[0]}, ${coordinates[1]}`;
+            } catch (error) {
+                resultElement.textContent = "Invalid address or could not find coordinates.";
+            }
+        }
+    </script>
+</body>
+</html>
